@@ -12,6 +12,8 @@ import folium
 import geopandas as gpd
 import pandas as pd
 import streamlit as st
+from branca.element import MacroElement
+from jinja2 import Template
 from streamlit_folium import st_folium
 
 st.set_page_config(page_title="UrbanPulse Bengaluru", page_icon="🌆", layout="wide")
@@ -45,6 +47,19 @@ ACTION_INFO = {
                                  "and cool surfaces.",
     "Maintain / monitor": "No major overlapping stress detected. Keep monitoring.",
 }
+
+class Recenter(MacroElement):
+    """After the map finishes loading, re-measure its size and centre it on Bengaluru.
+    Fixes the map opening off-centre when its container resizes after first render."""
+    _template = Template("""
+        {% macro script(this, kwargs) %}
+        setTimeout(function() {
+            {{ this._parent.get_name() }}.invalidateSize();
+            {{ this._parent.get_name() }}.setView([12.97, 77.59], 11);
+        }, 600);
+        {% endmacro %}
+    """)
+
 
 NUMERIC_COLS = ["population", "area_km2", "lst_day", "lst_night", "flood", "lost_frac", "tree",
                 "built", "lost_lake_km2", "pop_density", "heat_score", "flood_score",
@@ -121,7 +136,6 @@ with map_tab:
         display[col] = display[col].fillna(0)
 
         m = folium.Map(location=[12.97, 77.59], zoom_start=11, tiles="OpenStreetMap")
-        m.fit_bounds([[12.83, 77.46], [13.14, 77.78]])
 
         def style(feature):
             v = feature["properties"].get(col)
@@ -139,9 +153,11 @@ with map_tab:
         selected = wards[wards["name_en"] == ward_name][["name_en", "geometry"]]
         folium.GeoJson(selected, style_function=lambda f: {"fillOpacity": 0, "color": "#000000",
                                                            "weight": 3}).add_to(m)
+        m.add_child(Recenter())
+
         st.caption(f"**{layer_name}**: {caption}. Green/light = lower, red/dark = higher.")
 
-        out = st_folium(m, height=620, use_container_width=True,
+        out = st_folium(m, height=620, use_container_width=True, center=[12.97, 77.59], zoom=11,
                         returned_objects=["last_active_drawing"], key="map")
 
         clicked = (out or {}).get("last_active_drawing")
