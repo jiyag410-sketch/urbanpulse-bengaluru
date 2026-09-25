@@ -49,14 +49,31 @@ ACTION_INFO = {
 }
 
 class Recenter(MacroElement):
-    """After the map finishes loading, re-measure its size and centre it on Bengaluru.
+    """After the map finishes loading, re-measure its size and fit all of Bengaluru in view.
     Fixes the map opening off-centre when its container resizes after first render."""
     _template = Template("""
         {% macro script(this, kwargs) %}
-        setTimeout(function() {
-            {{ this._parent.get_name() }}.invalidateSize();
-            {{ this._parent.get_name() }}.setView([12.97, 77.59], 11);
-        }, 600);
+        (function() {
+            var map = {{ this._parent.get_name() }};
+            var bounds = [[12.83, 77.46], [13.14, 77.78]];
+            function refit() {
+                map.invalidateSize();
+                map.fitBounds(bounds, {padding: [10, 10]});
+            }
+            // Re-fit whenever the map's box changes size (it widens after first render)
+            if (window.ResizeObserver) {
+                var lastW = 0, lastH = 0;
+                new ResizeObserver(function(entries) {
+                    var r = entries[0].contentRect;
+                    if (Math.abs(r.width - lastW) > 5 || Math.abs(r.height - lastH) > 5) {
+                        lastW = r.width; lastH = r.height;
+                        refit();
+                    }
+                }).observe(map.getContainer());
+            }
+            // Fallback for browsers without ResizeObserver, and to catch late layout changes
+            [300, 1000, 2000].forEach(function(ms) { setTimeout(refit, ms); });
+        })();
         {% endmacro %}
     """)
 
